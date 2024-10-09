@@ -1,0 +1,447 @@
+Description: My VPC Peering Demo
+Parameters:
+  LatestAmiId:
+    Description: AMI for Bastion Host (default is latest AmaLinux2)
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+Resources:
+  VPCA:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.16.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: a4l-vpca
+  VPCB:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.17.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: a4l-vpcb
+  VPCC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.18.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: a4l-vpcc
+  SubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPCA
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs ''
+      CidrBlock: 10.16.0.0/20
+      Tags:
+        - Key: Name
+          Value: SubnetA
+  SubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPCB
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs ''
+      CidrBlock: 10.17.0.0/20
+      Tags:
+        - Key: Name
+          Value: SubnetB
+  SubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPCC
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs ''
+      CidrBlock: 10.18.0.0/20
+      Tags:
+        - Key: Name
+          Value: SubnetC
+  VPCASecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPCA
+      GroupDescription: Enable SSH access via port 22 IPv4 & v6
+      SecurityGroupIngress:
+        - Description: Allow SSH IPv4 IN
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - Description: Allow SSH IPv6 IN
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIpv6: '::/0'
+  VPCBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPCB
+      GroupDescription: Enable SSH access via port 22 IPv4 & v6
+      SecurityGroupIngress:
+        - Description: Allow SSH IPv4 IN
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - Description: Allow SSH IPv6 IN
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIpv6: '::/0'
+  VPCCSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPCC
+      GroupDescription: Enable SSH access via port 22 IPv4 & v6
+      SecurityGroupIngress:
+        - Description: Allow SSH IPv4 IN
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - Description: Allow SSH IPv6 IN
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIpv6: '::/0'
+  VPCASecurityGroupSelfReferenceRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref VPCASecurityGroup
+      IpProtocol: '-1'
+      SourceSecurityGroupId: !Ref VPCASecurityGroup
+  VPCBSecurityGroupSelfReferenceRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref VPCBSecurityGroup
+      IpProtocol: '-1'
+      SourceSecurityGroupId: !Ref VPCBSecurityGroup
+  VPCCSecurityGroupSelfReferenceRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref VPCCSecurityGroup
+      IpProtocol: '-1'
+      SourceSecurityGroupId: !Ref VPCCSecurityGroup
+  PrivateEC2A:
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - ssminterfaceendpoint
+      - ssmec2messagesinterfaceendpoint
+      - ssmmessagesinterfaceendpoint
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !Ref LatestAmiId
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      SubnetId: !Ref SubnetA
+      SecurityGroupIds:
+        - !Ref VPCASecurityGroup
+      Tags:
+        - Key: Name
+          Value: A4L-EC2VPCA
+  PrivateEC2B:
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - ssminterfaceendpoint
+      - ssmec2messagesinterfaceendpoint
+      - ssmmessagesinterfaceendpoint
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !Ref LatestAmiId
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      SubnetId: !Ref SubnetB
+      SecurityGroupIds:
+        - !Ref VPCBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: A4L-EC2VPCB
+  PrivateEC2C:
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - ssminterfaceendpoint
+      - ssmec2messagesinterfaceendpoint
+      - ssmmessagesinterfaceendpoint
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !Ref LatestAmiId
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      SubnetId: !Ref SubnetC
+      SecurityGroupIds:
+        - !Ref VPCCSecurityGroup
+      Tags:
+        - Key: Name
+          Value: A4L-EC2VPCC
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:DescribeAssociation
+                  - ssm:GetDeployablePatchSnapshotForInstance
+                  - ssm:GetDocument
+                  - ssm:DescribeDocument
+                  - ssm:GetManifest
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                  - ssm:ListAssociations
+                  - ssm:ListInstanceAssociations
+                  - ssm:PutInventory
+                  - ssm:PutComplianceItems
+                  - ssm:PutConfigurePackageResult
+                  - ssm:UpdateAssociationStatus
+                  - ssm:UpdateInstanceAssociationStatus
+                  - ssm:UpdateInstanceInformation
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ssmmessages:CreateControlChannel
+                  - ssmmessages:CreateDataChannel
+                  - ssmmessages:OpenControlChannel
+                  - ssmmessages:OpenDataChannel
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ec2messages:AcknowledgeMessage
+                  - ec2messages:DeleteMessage
+                  - ec2messages:FailMessage
+                  - ec2messages:GetEndpoint
+                  - ec2messages:GetMessages
+                  - ec2messages:SendReply
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:*
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - sns:*
+                Resource: '*'
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref EC2Role
+  ssminterfaceendpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref SubnetA
+      SecurityGroupIds:
+        - !Ref VPCASecurityGroup
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ssm
+      VpcId: !Ref VPCA
+  ssmec2messagesinterfaceendpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref SubnetA
+      SecurityGroupIds:
+        - !Ref VPCASecurityGroup
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ec2messages
+      VpcId: !Ref VPCA
+  ssmmessagesinterfaceendpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref SubnetA
+      SecurityGroupIds:
+        - !Ref VPCASecurityGroup
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ssmmessages
+      VpcId: !Ref VPCA
+
+  VPCPeeringAB:
+    Type: AWS::EC2::VPCPeeringConnection
+    Properties:
+      VpcId: !Ref VPCA
+      PeerVpcId: !Ref VPCB
+      PeerRegion: !Ref AWS::Region
+      Tags:
+        - Key: Name
+          Value: VPCPeeringAB
+
+  VPCPeeringBC:
+    Type: AWS::EC2::VPCPeeringConnection
+    Properties:
+      VpcId: !Ref VPCB
+      PeerVpcId: !Ref VPCC
+      PeerRegion: !Ref AWS::Region
+      Tags:
+        - Key: Name
+          Value: VPCPeeringBC
+
+  VPCPeeringAC:
+    Type: AWS::EC2::VPCPeeringConnection
+    Properties:
+      VpcId: !Ref VPCA
+      PeerVpcId: !Ref VPCC
+      PeerRegion: !Ref AWS::Region
+      Tags:
+        - Key: Name
+          Value: VPCPeeringAC
+
+  VPCASecurityGroupICMPIngressFromB:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref VPCASecurityGroup
+      IpProtocol: icmp
+      FromPort: -1
+      ToPort: -1
+      SourceSecurityGroupId: !Ref VPCBSecurityGroup # Allow ICMP from VPCB to VPCA
+
+  VPCBSecurityGroupICMPIngressFromA:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref VPCBSecurityGroup
+      IpProtocol: icmp
+      FromPort: -1
+      ToPort: -1
+      SourceSecurityGroupId: !Ref VPCASecurityGroup # Allow ICMP from VPCA to VPCB
+
+  VPCBSecurityGroupICMPIngressFromC:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref VPCBSecurityGroup
+      IpProtocol: icmp
+      FromPort: -1
+      ToPort: -1
+      SourceSecurityGroupId: !Ref VPCCSecurityGroup # Allow ICMP from VPCC to VPCB
+
+  VPCCSecurityGroupICMPIngressFromB:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref VPCCSecurityGroup
+      IpProtocol: icmp
+      FromPort: -1
+      ToPort: -1
+      SourceSecurityGroupId: !Ref VPCBSecurityGroup # Allow ICMP from VPCB to VPCC
+
+  VPCCSecurityGroupICMPIngressFromA:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref VPCCSecurityGroup
+      IpProtocol: icmp
+      FromPort: -1
+      ToPort: -1
+      SourceSecurityGroupId: !Ref VPCASecurityGroup # Allow ICMP from VPCA to VPCC
+
+  VPCASecurityGroupICMPIngressFromC:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref VPCASecurityGroup
+      IpProtocol: icmp
+      FromPort: -1
+      ToPort: -1
+      SourceSecurityGroupId: !Ref VPCCSecurityGroup # Allow ICMP from VPCC to VPCA
+
+  RouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPCA
+      Tags:
+        - Key: Name
+          Value: RouteTableA
+
+  RouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPCB
+      Tags:
+        - Key: Name
+          Value: RouteTableB
+
+  RouteTableC:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPCC
+      Tags:
+        - Key: Name
+          Value: RouteTableC
+  RouteTableAssociationA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTableA
+      SubnetId: !Ref SubnetA
+
+  RouteTableAssociationB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTableB
+      SubnetId: !Ref SubnetB
+
+  RouteTableAssociationC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTableC
+      SubnetId: !Ref SubnetC
+
+  RouteTableAtoB:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTableA
+      DestinationCidrBlock: !GetAtt VPCB.CidrBlock # Refers to VPC B's CIDR block
+      VpcPeeringConnectionId: !Ref VPCPeeringAB
+
+  RouteTableAtoC:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTableA
+      DestinationCidrBlock: !GetAtt VPCC.CidrBlock # Refers to VPC C's CIDR block
+      VpcPeeringConnectionId: !Ref VPCPeeringAC
+
+  RouteTableBtoA:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTableB
+      DestinationCidrBlock: !GetAtt VPCA.CidrBlock # Refers to VPC A's CIDR block
+      VpcPeeringConnectionId: !Ref VPCPeeringAB
+
+  RouteTableBtoC:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTableB
+      DestinationCidrBlock: !GetAtt VPCC.CidrBlock # Refers to VPC C's CIDR block
+      VpcPeeringConnectionId: !Ref VPCPeeringBC
+
+  RouteTableCtoA:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTableC
+      DestinationCidrBlock: !GetAtt VPCA.CidrBlock # Refers to VPC A's CIDR block
+      VpcPeeringConnectionId: !Ref VPCPeeringAC
+
+  RouteTableCtoB:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTableC
+      DestinationCidrBlock: !GetAtt VPCB.CidrBlock # Refers to VPC B's CIDR block
+      VpcPeeringConnectionId: !Ref VPCPeeringBC
